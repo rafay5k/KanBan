@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board - Task Management</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Axios for API requests -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <!-- DND Kit -->
+    <script src="https://cdn.jsdelivr.net/npm/@dnd-kit/core@6.0.8/dist/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@dnd-kit/sortable@7.0.2/dist/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@dnd-kit/utilities@3.2.1/dist/index.umd.js"></script>
+
+    <style>
+        /* Custom scrollbar for columns */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Drag overlay styles */
+        .drag-overlay {
+            transform: rotate(5deg);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Column drop zone indicator */
+        .drop-zone-active {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px dashed #0ea5e9;
+        }
+
+        /* Card dragging state */
+        .card-dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        /* Loading animation */
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Pulse animation for loading state */
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } = DndKit;
+        const { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } = DndKitSortable;
+        const { CSS } = DndKitUtilities;
+
+        // API Configuration
+        const API_BASE_URL = 'http://localhost:3000';
+
+        // Column Configuration
+        const COLUMNS = [
+            { id: 'todo', title: 'To Do', color: 'bg-blue-50 border-blue-200' },
+            { id: 'in-progress', title: 'In Progress', color: 'bg-yellow-50 border-yellow-200' },
+            { id: 'completed', title: 'Completed', color: 'bg-green-50 border-green-200' }
+        ];
+
+        // Utility function to format date
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric'
+            });
+        };
+
+        // Utility function to truncate text
+        const truncateText = (text, maxLength = 50) => {
+            if (!text) return '';
+            return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        };
+
+        // Card Component
+        const Card = ({ task }) => {
+            const {
+                attributes,
+                listeners,
+                setNodeRef,
+                transform,
+                transition,
+                isDragging,
+            } = useSortable({ id: task._id });
+
+            const style = {
+                transform: CSS.Transform.toString(transform),
+                transition,
+            };
+
+            return (
+                <div
+                    ref={setNodeRef}
+                    style={style}
+                    {...attributes}
+                    {...listeners}
+                    className={`
+                        bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3 cursor-grab
+                        hover:shadow-md hover:border-gray-300 transition-all duration-200
+                        ${isDragging ? 'opacity-50 rotate-2 shadow-xl' : 'hover:scale-105'}
+                        active:cursor-grabbing
+                    `}
+                >
+                    <div className="space-y-3">
+                        {/* Task Title */}
+                        <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+                            {task.title}
+                        </h3>
+                        
+                        {/* Task Description */}
+                        {task.description && (
+                            <p className="text-gray-600 text-xs leading-relaxed">
+                                {truncateText(task.description, 80)}
+                            </p>
+                        )}
+                        
+                        {/* Task Metadata */}
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                            <span className="text-xs text-gray-500">
+                                Created: {formatDate(task.createdAt)}
+                            </span>
+                            <div className="flex items-center space-x-1">
+                                <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                                <span className="text-xs text-gray-400">#{task.order}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Column Component
+        const Column = ({ column, tasks, isOver }) => {
+            const taskIds = tasks.map(task => task._id);
+
+            return (
+                <div className={`
+                    flex-1 min-w-80 max-w-sm mx-2 mb-6
+                    ${column.color} rounded-xl border-2 transition-all duration-300
+                    ${isOver ? 'drop-zone-active scale-105' : ''}
+                `}>
+                    {/* Column Header */}
+                    <div className="p-4 border-b border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-gray-800 text-lg">
+                                {column.title}
+                            </h2>
+                            <div className="flex items-center space-x-2">
+                                <span className="bg-white text-gray-600 text-sm font-medium px-2 py-1 rounded-full shadow-sm">
+                                    {tasks.length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Tasks Container */}
+                    <div className="p-4 h-96 overflow-y-auto custom-scrollbar">
+                        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+                            {tasks.length === 0 ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-center">
+                                        <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-gray-500 text-sm">No tasks yet</p>
+                                        <p className="text-gray-400 text-xs mt-1">Drag tasks here</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                tasks.map(task => (
+                                    <Card key={task._id} task={task} />
+                                ))
+                            )}
+                        </SortableContext>
+                    </div>
+                </div>
+            );
+        };
+
+        // Loading Component
+        const LoadingSpinner = () => (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="loading-spinner w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-600 text-lg font-medium">Loading your tasks...</p>
+                    <p className="text-gray-400 text-sm mt-1">Please wait while we fetch your Kanban board</p>
+                </div>
+            </div>
+        );
+
+        // Error Component
+        const ErrorMessage = ({ message, onRetry }) => (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center max-w-md mx-auto p-6">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Oops! Something went wrong</h2>
+                    <p className="text-gray-600 mb-6">{message}</p>
+                    <button
+                        onClick={onRetry}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                    >
+                        Try Again
+                    </button>
+                    <p className="text-gray-400 text-sm mt-4">
+                        Make sure your API server is running at {API_BASE_URL}
+                    </p>
+                </div>
+            </div>
+        );
+
+        // Main App Component
+        const App = () => {
+            const [tasks, setTasks] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [activeTask, setActiveTask] = useState(null);
+
+            // Drag sensors configuration
+            const sensors = useSensors(
+                useSensor(PointerSensor, {
+                    activationConstraint: {
+                        distance: 8,
+                    },
+                })
+            );
+
+            // Fetch tasks from API
+            const fetchTasks = async () => {
+                try {
+                    setIsLoading(true);
+                    setError(null);
+                    
+                    const response = await axios.get(`${API_BASE_URL}/api/tasks`);
+                    
+                    if (response.data.status === 'success') {
+                        setTasks(response.data.data.tasks);
+                    } else {
+                        throw new Error('Failed to fetch tasks');
+                    }
+                } catch (err) {
+                    console.error('Error fetching tasks:', err);
+                    setError(err.response?.data?.message || 'Failed to connect to the server. Please check if the API is running.');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // Update task via API
+            const updateTask = async (taskId, updates) => {
+                try {
+                    const response = await axios.put(`${API_BASE_URL}/api/tasks/${taskId}`, updates);
+                    if (response.data.status !== 'success') {
+                        throw new Error('Failed to update task');
+                    }
+                    return response.data.data.task;
+                } catch (err) {
+                    console.error('Error updating task:', err);
+                    throw err;
+                }
+            };
+
+            // Handle drag start
+            const handleDragStart = (event) => {
+                const { active } = event;
+                const task = tasks.find(t => t._id === active.id);
+                setActiveTask(task);
+            };
+
+            // Handle drag end
+            const handleDragEnd = async (event) => {
+                const { active, over } = event;
+                setActiveTask(null);
+
+                if (!over) return;
+
+                const activeTaskId = active.id;
+                const activeTask = tasks.find(t => t._id === activeTaskId);
+                
+                if (!activeTask) return;
+
+                const overId = over.id;
+                const overTask = tasks.find(t => t._id === overId);
+                
+                // Determine the target column
+                let targetColumnId;
+                if (COLUMNS.find(col => col.id === overId)) {
+                    // Dropped on a column
+                    targetColumnId = overId;
+                } else if (overTask) {
+                    // Dropped on a task
+                    targetColumnId = overTask.columnId;
+                } else {
+                    return;
+                }
+
+                // If no change needed
+                if (activeTask.columnId === targetColumnId && !overTask) {
+                    return;
+                }
+
+                // Calculate new order
+                let newOrder = 1;
+                if (overTask && targetColumnId === overTask.columnId) {
+                    // Dropping on a task in the same/different column
+                    newOrder = overTask.order;
+                } else {
+                    // Dropping on empty column, get next order
+                    const columnTasks = tasks.filter(t => t.columnId === targetColumnId && t._id !== activeTaskId);
+                    newOrder = columnTasks.length + 1;
+                }
+
+                // Optimistic update
+                const updatedTasks = tasks.map(task => {
+                    if (task._id === activeTaskId) {
+                        return { ...task, columnId: targetColumnId, order: newOrder };
+                    }
+                    
+                    // Adjust orders for other tasks
+                    if (task.columnId === activeTask.columnId && task._id !== activeTaskId && task.order > activeTask.order) {
+                        return { ...task, order: task.order - 1 };
+                    }
+                    
+                    if (task.columnId === targetColumnId && task._id !== activeTaskId && task.order >= newOrder) {
+                        return { ...task, order: task.order + 1 };
+                    }
+                    
+                    return task;
+                });
+
+                setTasks(updatedTasks);
+
+                // Persist to API
+                try {
+                    await updateTask(activeTaskId, {
+                        columnId: targetColumnId,
+                        order: newOrder
+                    });
+                    
+                    // Refresh to get accurate order from server
+                    setTimeout(() => {
+                        fetchTasks();
+                    }, 500);
+                    
+                } catch (error) {
+                    // Revert optimistic update on error
+                    setTasks(tasks);
+                    alert('Failed to update task. Please try again.');
+                }
+            };
+
+            // Group tasks by column
+            const groupedTasks = COLUMNS.reduce((acc, column) => {
+                acc[column.id] = tasks
+                    .filter(task => task.columnId === column.id)
+                    .sort((a, b) => a.order - b.order);
+                return acc;
+            }, {});
+
+            // Initial load
+            useEffect(() => {
+                fetchTasks();
+            }, []);
+
+            // Loading state
+            if (isLoading) {
+                return <LoadingSpinner />;
+            }
+
+            // Error state
+            if (error) {
+                return <ErrorMessage message={error} onRetry={fetchTasks} />;
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b border-gray-200">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-900">Kanban Board</h1>
+                                    <p className="text-gray-600 mt-1">Organize your tasks efficiently</p>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-gray-900">{tasks.length} Total Tasks</p>
+                                        <p className="text-xs text-gray-500">Last updated: {new Date().toLocaleTimeString()}</p>
+                                    </div>
+                                    <button
+                                        onClick={fetchTasks}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <span>Refresh</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Kanban Board */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCorners}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                        >
+                            {/* Board Container */}
+                            <div className="flex flex-col lg:flex-row lg:space-x-6 space-y-6 lg:space-y-0">
+                                {COLUMNS.map(column => (
+                                    <Column
+                                        key={column.id}
+                                        column={column}
+                                        tasks={groupedTasks[column.id] || []}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Drag Overlay */}
+                            <DragOverlay>
+                                {activeTask ? (
+                                    <div className="drag-overlay">
+                                        <Card task={activeTask} />
+                                    </div>
+                                ) : null}
+                            </DragOverlay>
+                        </DndContext>
+
+                        {/* Statistics */}
+                        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {COLUMNS.map(column => {
+                                const columnTasks = groupedTasks[column.id] || [];
+                                return (
+                                    <div key={column.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                        <div className="flex items-center">
+                                            <div className={`w-12 h-12 ${column.color} rounded-lg flex items-center justify-center mr-4`}>
+                                                <span className="text-2xl font-bold text-gray-700">{columnTasks.length}</span>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-semibold text-gray-900">{column.title}</h3>
+                                                <p className="text-gray-500 text-sm">
+                                                    {columnTasks.length === 0 ? 'No tasks' : 
+                                                     columnTasks.length === 1 ? '1 task' : 
+                                                     `${columnTasks.length} tasks`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="bg-white border-t border-gray-200 mt-16">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div className="text-center text-gray-500 text-sm">
+                                <p>Kanban Board - Task Management System</p>
+                                <p className="mt-1">Built with React.js, @dnd-kit, and Tailwind CSS</p>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

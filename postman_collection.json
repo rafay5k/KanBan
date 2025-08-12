@@ -1,0 +1,620 @@
+{
+  "info": {
+    "name": "Kanban Board API",
+    "description": "Comprehensive API collection for testing the Trello-style Kanban board with drag-and-drop functionality",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "task_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the API server is running and healthy"
+          },
+          "response": []
+        },
+        {
+          "name": "API Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Get API information and available endpoints"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks - Basic Operations",
+      "item": [
+        {
+          "name": "Get All Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Fetch all tasks from all columns, sorted by column and order"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks by Column - Todo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?columnId=todo",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [
+                {
+                  "key": "columnId",
+                  "value": "todo"
+                }
+              ]
+            },
+            "description": "Fetch only tasks from the 'todo' column"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks by Column - In Progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?columnId=in-progress",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [
+                {
+                  "key": "columnId",
+                  "value": "in-progress"
+                }
+              ]
+            },
+            "description": "Fetch only tasks from the 'in-progress' column"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks by Column - Completed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?columnId=completed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [
+                {
+                  "key": "columnId",
+                  "value": "completed"
+                }
+              ]
+            },
+            "description": "Fetch only tasks from the 'completed' column"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks - Create",
+      "item": [
+        {
+          "name": "Create Task - Auto Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save task ID for future requests",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('task_id', response.data.task._id);",
+                  "    console.log('Task created with ID:', response.data.task._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Implement drag and drop functionality\",\n  \"description\": \"Add @dnd-kit library and implement task reordering\",\n  \"columnId\": \"todo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Create a new task without specifying order (will be auto-assigned)"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Task - Specific Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Add error handling middleware\",\n  \"description\": \"Implement comprehensive error handling for all API endpoints\",\n  \"columnId\": \"todo\",\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Create a new task at a specific position (will shift other tasks)"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Task - Minimal Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Quick task with minimal info\",\n  \"columnId\": \"in-progress\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Create a task with only required fields"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks - Update & Move",
+      "item": [
+        {
+          "name": "Update Task Content",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated task title - now with more details\",\n  \"description\": \"This task description has been updated with more comprehensive information\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Update task title and description without changing position"
+          },
+          "response": []
+        },
+        {
+          "name": "Move Task to Different Column",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"in-progress\",\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Move a task from one column to another (simulates drag and drop)"
+          },
+          "response": []
+        },
+        {
+          "name": "Reorder Task Within Column",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"in-progress\",\n  \"order\": 3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Change task order within the same column"
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Task (Move to Completed)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"completed\",\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Mark task as completed by moving to completed column"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks - Bulk Operations",
+      "item": [
+        {
+          "name": "Bulk Reorder Tasks in Column",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"todo\",\n  \"tasks\": [\n    { \"_id\": \"REPLACE_WITH_ACTUAL_TASK_ID_1\", \"order\": 1 },\n    { \"_id\": \"REPLACE_WITH_ACTUAL_TASK_ID_2\", \"order\": 2 },\n    { \"_id\": \"REPLACE_WITH_ACTUAL_TASK_ID_3\", \"order\": 3 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/reorder",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "reorder"]
+            },
+            "description": "Bulk update task orders within a column (useful for complex reordering operations)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks - Delete",
+      "item": [
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Delete a task (will automatically adjust order of remaining tasks in the column)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Error Testing",
+      "item": [
+        {
+          "name": "Create Task - Invalid Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad\",\n  \"columnId\": \"invalid-column\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Test validation errors - title too short and invalid columnId"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Task - Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Task without title or columnId\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Test missing required fields error"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks - Invalid Column Filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks?columnId=invalid-column",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"],
+              "query": [
+                {
+                  "key": "columnId",
+                  "value": "invalid-column"
+                }
+              ]
+            },
+            "description": "Test invalid columnId filter"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Non-existent Task",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated title\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/507f1f77bcf86cd799439011",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "507f1f77bcf86cd799439011"]
+            },
+            "description": "Test updating a non-existent task (404 error)"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Non-existent Task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/507f1f77bcf86cd799439011",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "507f1f77bcf86cd799439011"]
+            },
+            "description": "Test deleting a non-existent task (404 error)"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Task ID Format",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks/invalid-id-format",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "invalid-id-format"]
+            },
+            "description": "Test invalid MongoDB ObjectId format"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Workflow Examples",
+      "item": [
+        {
+          "name": "1. Create Multiple Tasks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Design database schema\",\n  \"description\": \"Create detailed ERD and define relationships\",\n  \"columnId\": \"todo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Step 1: Create a new task in Todo column"
+          },
+          "response": []
+        },
+        {
+          "name": "2. Move Task to In Progress",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"in-progress\",\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Step 2: Start working on the task (move to In Progress)"
+          },
+          "response": []
+        },
+        {
+          "name": "3. Complete the Task",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columnId\": \"completed\",\n  \"order\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks", "{{task_id}}"]
+            },
+            "description": "Step 3: Mark task as completed"
+          },
+          "response": []
+        },
+        {
+          "name": "4. View Final Board State",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "tasks"]
+            },
+            "description": "Step 4: View the complete Kanban board state"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Log the request for debugging",
+          "console.log('Making request to:', pm.request.url.toString());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Log response status and time",
+          "console.log('Response status:', pm.response.code);",
+          "console.log('Response time:', pm.response.responseTime + 'ms');",
+          "",
+          "// Basic assertions for successful responses",
+          "if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    pm.test('Status code is successful', function () {",
+          "        pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+          "    });",
+          "    ",
+          "    pm.test('Response has correct content type', function () {",
+          "        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "    });",
+          "    ",
+          "    pm.test('Response has status field', function () {",
+          "        const jsonData = pm.response.json();",
+          "        pm.expect(jsonData).to.have.property('status');",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ]
+}

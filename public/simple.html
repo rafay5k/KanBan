@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Kanban Board</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .board { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .column { background: white; border-radius: 8px; padding: 20px; min-height: 400px; flex: 1; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .column h2 { margin-top: 0; text-align: center; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+        .task { background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+        .task-title { font-weight: bold; margin-bottom: 5px; }
+        .task-desc { font-size: 14px; color: #666; }
+        .loading { text-align: center; font-size: 18px; margin-top: 50px; }
+        .error { color: red; text-align: center; margin-top: 50px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗂️ Kanban Board</h1>
+        <p>Task Management System</p>
+    </div>
+
+    <div id="content">
+        <div class="loading">Loading tasks...</div>
+    </div>
+
+    <script>
+        // Simple JavaScript to fetch and display tasks
+        async function loadTasks() {
+            const contentDiv = document.getElementById('content');
+            
+            try {
+                console.log('Fetching tasks from API...');
+                const response = await fetch('http://localhost:3000/api/tasks');
+                const data = await response.json();
+                
+                console.log('API Response:', data);
+                
+                if (data.status === 'success') {
+                    displayTasks(data.data.tasks);
+                } else {
+                    throw new Error('Failed to fetch tasks');
+                }
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                contentDiv.innerHTML = `<div class="error">Error: ${error.message}<br>Please check if the API server is running at http://localhost:3000</div>`;
+            }
+        }
+
+        function displayTasks(tasks) {
+            const columns = {
+                'todo': { title: 'To Do', tasks: [] },
+                'in-progress': { title: 'In Progress', tasks: [] },
+                'completed': { title: 'Completed', tasks: [] }
+            };
+
+            // Sort tasks into columns
+            tasks.forEach(task => {
+                if (columns[task.columnId]) {
+                    columns[task.columnId].tasks.push(task);
+                }
+            });
+
+            // Sort tasks by order within each column
+            Object.keys(columns).forEach(columnId => {
+                columns[columnId].tasks.sort((a, b) => a.order - b.order);
+            });
+
+            // Generate HTML
+            let html = '<div class="board">';
+            
+            Object.keys(columns).forEach(columnId => {
+                const column = columns[columnId];
+                html += `<div class="column">`;
+                html += `<h2>${column.title}</h2>`;
+                
+                column.tasks.forEach(task => {
+                    html += `<div class="task">`;
+                    html += `<div class="task-title">${task.title}</div>`;
+                    if (task.description) {
+                        html += `<div class="task-desc">${task.description}</div>`;
+                    }
+                    html += `</div>`;
+                });
+                
+                html += `</div>`;
+            });
+            
+            html += '</div>';
+
+            document.getElementById('content').innerHTML = html;
+            console.log('Tasks displayed successfully');
+        }
+
+        // Load tasks when page loads
+        window.addEventListener('load', loadTasks);
+    </script>
+</body>
+</html>

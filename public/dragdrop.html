@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board - Drag & Drop</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Axios for API requests -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Drag and drop styles */
+        .dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+            transition: transform 0.2s ease;
+        }
+
+        .drag-over {
+            background-color: #dbeafe !important;
+            border: 2px dashed #3b82f6 !important;
+        }
+
+        .task-card {
+            cursor: grab;
+            user-select: none;
+        }
+
+        .task-card:active {
+            cursor: grabbing;
+        }
+
+        .drop-zone {
+            min-height: 100px;
+            transition: all 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // API Configuration
+        const API_BASE_URL = 'http://localhost:3000';
+
+        // Column Configuration
+        const COLUMNS = [
+            { id: 'todo', title: 'To Do', color: 'bg-blue-50 border-blue-200' },
+            { id: 'in-progress', title: 'In Progress', color: 'bg-yellow-50 border-yellow-200' },
+            { id: 'completed', title: 'Completed', color: 'bg-green-50 border-green-200' }
+        ];
+
+        // Task Card Component with Drag and Drop
+        const TaskCard = ({ task, onDragStart, onDragEnd }) => {
+            const [isDragging, setIsDragging] = useState(false);
+
+            const handleDragStart = (e) => {
+                setIsDragging(true);
+                e.dataTransfer.setData('text/plain', task._id);
+                e.dataTransfer.effectAllowed = 'move';
+                onDragStart(task);
+            };
+
+            const handleDragEnd = (e) => {
+                setIsDragging(false);
+                onDragEnd();
+            };
+
+            return (
+                <div
+                    className={`task-card bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3 hover:shadow-md transition-all duration-200 ${isDragging ? 'dragging' : ''}`}
+                    draggable="true"
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                >
+                    <div className="space-y-3">
+                        <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+                            {task.title}
+                        </h3>
+                        
+                        {task.description && (
+                            <p className="text-gray-600 text-xs leading-relaxed">
+                                {task.description}
+                            </p>
+                        )}
+                        
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span className="bg-gray-100 px-2 py-1 rounded">
+                                #{task.order}
+                            </span>
+                            <span>
+                                {new Date(task.createdAt).toLocaleDateString()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Column Component with Drop Zone
+        const Column = ({ column, tasks, onDrop, onDragOver, onDragLeave, isDragOver }) => {
+            const dropRef = useRef(null);
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                onDragOver(column.id);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                const taskId = e.dataTransfer.getData('text/plain');
+                onDrop(taskId, column.id);
+            };
+
+            const handleDragLeave = (e) => {
+                // Only trigger if leaving the column entirely
+                if (!dropRef.current?.contains(e.relatedTarget)) {
+                    onDragLeave();
+                }
+            };
+
+            return (
+                <div
+                    ref={dropRef}
+                    className={`drop-zone rounded-lg border-2 p-4 ${column.color} min-h-96 ${isDragOver ? 'drag-over' : ''}`}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                    onDragLeave={handleDragLeave}
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-bold text-gray-800 text-lg">
+                            {column.title}
+                        </h2>
+                        <span className="bg-white text-gray-600 text-sm font-medium px-2 py-1 rounded-full">
+                            {tasks.length}
+                        </span>
+                    </div>
+                    
+                    <div className="space-y-2 custom-scrollbar max-h-96 overflow-y-auto">
+                        {tasks.length === 0 ? (
+                            <div className="flex items-center justify-center h-32">
+                                <div className="text-center">
+                                    <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2">
+                                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-gray-500 text-sm">No tasks</p>
+                                    <p className="text-gray-400 text-xs mt-1">Drop tasks here</p>
+                                </div>
+                            </div>
+                        ) : (
+                            tasks.map(task => (
+                                <TaskCard 
+                                    key={task._id} 
+                                    task={task}
+                                    onDragStart={() => {}}
+                                    onDragEnd={() => {}}
+                                />
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // Loading Component
+        const LoadingSpinner = () => (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-600 text-lg font-medium">Loading your tasks...</p>
+                    <p className="text-gray-400 text-sm mt-1">Please wait while we fetch your Kanban board</p>
+                </div>
+            </div>
+        );
+
+        // Error Component
+        const ErrorMessage = ({ message, onRetry }) => (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center max-w-md mx-auto p-6">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Oops! Something went wrong</h2>
+                    <p className="text-gray-600 mb-6">{message}</p>
+                    <button
+                        onClick={onRetry}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                    >
+                        Try Again
+                    </button>
+                    <p className="text-gray-400 text-sm mt-4">
+                        Make sure your API server is running at {API_BASE_URL}
+                    </p>
+                </div>
+            </div>
+        );
+
+        // Success Toast Component
+        const SuccessToast = ({ message, show, onHide }) => {
+            useEffect(() => {
+                if (show) {
+                    const timer = setTimeout(onHide, 3000);
+                    return () => clearTimeout(timer);
+                }
+            }, [show, onHide]);
+
+            if (!show) return null;
+
+            return (
+                <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-fade-in">
+                    <div className="flex items-center space-x-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>{message}</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const App = () => {
+            const [tasks, setTasks] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [dragOverColumn, setDragOverColumn] = useState(null);
+            const [showSuccessToast, setShowSuccessToast] = useState(false);
+            const [successMessage, setSuccessMessage] = useState('');
+
+            // Fetch tasks from API
+            const fetchTasks = async () => {
+                try {
+                    setIsLoading(true);
+                    setError(null);
+                    
+                    console.log('Fetching tasks from API...');
+                    const response = await axios.get(`${API_BASE_URL}/api/tasks`);
+                    
+                    console.log('API Response:', response.data);
+                    
+                    if (response.data.status === 'success') {
+                        setTasks(response.data.data.tasks);
+                    } else {
+                        throw new Error('Failed to fetch tasks');
+                    }
+                } catch (err) {
+                    console.error('Error fetching tasks:', err);
+                    setError(err.response?.data?.message || 'Failed to connect to the server. Please check if the API is running.');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // Update task in database
+            const updateTask = async (taskId, updates) => {
+                try {
+                    const response = await axios.put(`${API_BASE_URL}/api/tasks/${taskId}`, updates);
+                    if (response.data.status === 'success') {
+                        return response.data.data.task;
+                    } else {
+                        throw new Error('Failed to update task');
+                    }
+                } catch (err) {
+                    console.error('Error updating task:', err);
+                    throw err;
+                }
+            };
+
+            // Handle task drop
+            const handleDrop = async (taskId, newColumnId) => {
+                setDragOverColumn(null);
+                
+                const task = tasks.find(t => t._id === taskId);
+                if (!task || task.columnId === newColumnId) return;
+
+                // Optimistic update
+                const updatedTasks = tasks.map(t => 
+                    t._id === taskId ? { ...t, columnId: newColumnId } : t
+                );
+                setTasks(updatedTasks);
+
+                try {
+                    // Update in database
+                    await updateTask(taskId, { columnId: newColumnId });
+                    
+                    // Show success message
+                    setSuccessMessage(`Task moved to ${COLUMNS.find(c => c.id === newColumnId)?.title}!`);
+                    setShowSuccessToast(true);
+                    
+                    console.log(`Task "${task.title}" moved to ${newColumnId}`);
+                } catch (err) {
+                    // Revert optimistic update on error
+                    setTasks(tasks);
+                    setError('Failed to move task. Please try again.');
+                    console.error('Failed to update task:', err);
+                }
+            };
+
+            // Handle drag over column
+            const handleDragOver = (columnId) => {
+                setDragOverColumn(columnId);
+            };
+
+            // Handle drag leave
+            const handleDragLeave = () => {
+                setDragOverColumn(null);
+            };
+
+            // Load tasks on component mount
+            useEffect(() => {
+                fetchTasks();
+            }, []);
+
+            // Group tasks by column
+            const tasksByColumn = tasks.reduce((acc, task) => {
+                if (!acc[task.columnId]) {
+                    acc[task.columnId] = [];
+                }
+                acc[task.columnId].push(task);
+                return acc;
+            }, {});
+
+            // Sort tasks within each column by order
+            Object.keys(tasksByColumn).forEach(columnId => {
+                tasksByColumn[columnId].sort((a, b) => a.order - b.order);
+            });
+
+            if (isLoading) return <LoadingSpinner />;
+            if (error) return <ErrorMessage message={error} onRetry={fetchTasks} />;
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Success Toast */}
+                    <SuccessToast 
+                        message={successMessage}
+                        show={showSuccessToast}
+                        onHide={() => setShowSuccessToast(false)}
+                    />
+
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b border-gray-200">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-900">
+                                        🗂️ Kanban Board
+                                    </h1>
+                                    <p className="text-gray-600 mt-1">
+                                        Drag and drop tasks between columns
+                                    </p>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <div className="text-sm text-gray-500">
+                                        Total Tasks: <span className="font-semibold text-gray-900">{tasks.length}</span>
+                                    </div>
+                                    <button
+                                        onClick={fetchTasks}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                                    >
+                                        Refresh
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {COLUMNS.map(column => (
+                                <Column
+                                    key={column.id}
+                                    column={column}
+                                    tasks={tasksByColumn[column.id] || []}
+                                    onDrop={handleDrop}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    isDragOver={dragOverColumn === column.id}
+                                />
+                            ))}
+                        </div>
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="bg-white border-t border-gray-200 mt-16">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div className="text-center text-gray-500 text-sm">
+                                <p>Kanban Board - Task Management System with Drag & Drop</p>
+                                <p className="mt-1">Built with React.js and HTML5 Drag API</p>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        // Render the app
+        console.log('Rendering React app with drag and drop...');
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
